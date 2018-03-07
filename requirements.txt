@@ -1,0 +1,4 @@
+# version 1.1.2 is broken
+py_ecc==1.1.1
+pycryptodome
+git+https://github.com/ethereum/pyethereum.git
