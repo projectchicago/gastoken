@@ -169,7 +169,7 @@ contract GasToken2 is Rlp {
     // caller of this function by destroying `value` child contracts, which
     // will trigger a partial gas refund.
     // You should ensure that you pass at least 25710 + `value` * (1148 + 5722 + 150) gas
-    // when calling this function. For details, see the comment above `destroyChilden`.
+    // when calling this function. For details, see the comment above `destroyChildren`.
     function free(uint256 value) public returns (bool success) {
         uint256 from_balance = s_balances[msg.sender];
         if (value > from_balance) {
@@ -186,7 +186,7 @@ contract GasToken2 is Rlp {
     // Frees up to `value` sub-tokens. Returns how many tokens were freed.
     // Otherwise, identical to free.
     // You should ensure that you pass at least 25710 + `value` * (1148 + 5722 + 150) gas
-    // when calling this function. For details, see the comment above `destroyChilden`.
+    // when calling this function. For details, see the comment above `destroyChildren`.
     function freeUpTo(uint256 value) public returns (uint256 freed) {
         uint256 from_balance = s_balances[msg.sender];
         if (value > from_balance) {
@@ -203,7 +203,7 @@ contract GasToken2 is Rlp {
     // Frees `value` sub-tokens owned by address `from`. Requires that `msg.sender`
     // has been approved by `from`.
     // You should ensure that you pass at least 25710 + `value` * (1148 + 5722 + 150) gas
-    // when calling this function. For details, see the comment above `destroyChilden`.
+    // when calling this function. For details, see the comment above `destroyChildren`.
     function freeFrom(address from, uint256 value) public returns (bool success) {
         address spender = msg.sender;
         uint256 from_balance = s_balances[from];
@@ -228,7 +228,7 @@ contract GasToken2 is Rlp {
     // Frees up to `value` sub-tokens owned by address `from`. Returns how many tokens were freed.
     // Otherwise, identical to `freeFrom`.
     // You should ensure that you pass at least 25710 + `value` * (1148 + 5722 + 150) gas
-    // when calling this function. For details, see the comment above `destroyChilden`.
+    // when calling this function. For details, see the comment above `destroyChildren`.
     function freeFromUpTo(address from, uint256 value) public returns (uint256 freed) {
         address spender = msg.sender;
         uint256 from_balance = s_balances[from];
