@@ -1,0 +1,261 @@
+[ THESE ARE SECURITY NOTES AND SHOULD NOT BE TAKEN AS A FULL, PROFESSIONAL, OR
+INDEPENDENT AUDIT: THEIR CREATOR WAS PARTY TO THE DEVELOPMENT OF GASTOKEN AND
+CAN THUS NOT OBJECTIVELY EVALUATE THE SECURITY OF THIS PROJECT.  PLEASE
+PERFORM OR COMMISION YOUR OWN REVIEWS IF TRUSTING ANY CONTRACTS WITH
+FUNDS ]
+
+[ Contract Versions Analyzed ]
+
+	gas_coin/contract$ sha256sum *.sol
+	c0828747f108f506d7880212f32d1d11fb1aa9ff9e51d3048d3a6019dc2bf83b  contract_gas_token.sol
+	b983d85cb4bc5ac1c067a71cd900504592908063ae3ac4e08d8cc0f52326324c  frugal_gst2_example.sol
+	e8e9cf5ac59a95b85d47da9dcaa134b470034c487ae54bf4e8e47edf1a643df2  gas_token.sol
+	d0223c3f56cca4c2a204805056784596697415f1b6b212b9f37002ce184006fe  rlp.sol
+	0ffab56081c08d6b03b48c6f23b3bec966b077265a0a54e22d3c2c7670c1520a  test_helper.sol
+
+[ ERC20 Exploits ]
+
+The contract is vulnerable to the classic ERC20 anti-patterns, including the short address
+and transaction ordering-based exploits.
+
+In terms of ERC20 correctness, the contract is based on a differentially developed Hydra-based
+ERC20 where one of the heads has undergone formal verification.  The differential test suite
+used to test both this and the official Viper ERC20, with full statement and decision coverage,
+is tested against all GasToken ERC20 code.
+
+[ Arithmetic Errors ]
+
+(rlp.sol):
+
+	- count_bytes ; Will always be called with a maximum nonce of n = 256 ** 9 (a reasonable 
+	upper bound on the number of GST2 contracts ever created), which is required for 
+	correctness.  This invariant is shared with the mk_contract_address function, which
+	is the only caller of count_bytes, can can be trivially audited to call passing through 
+	the correct value.  No overflow in either *i* or *mask* is possible in this value range
+	by inspection.  This invariant is enforced in the code by the check to the caller,
+	checking that the provided nonce is less than MAX_NONCE, the maximum number of contracts
+	ever created for GST2.
+	
+	- mk_contract_address ; Will always be called with a maximum nonce of n = 256 ** 9 (a reasonable 
+	upper bound on the number of GST2 contracts ever created), which is required for 
+	correctness.  The lines with potentially problematic arithmetic:
+	
+	        uint256 tot_bytes = 1 + ADDRESS_BYTES + nonce_rlp_len; (max of 21 if nonce_rlp_len functions)
+	                uint256 word = ((192 + tot_bytes) * 256**31) +
+                       ((128 + ADDRESS_BYTES) * 256**30) +
+                       (uint256(a) * 256**10);
+			
+			uint256 word = ((192 + 21) * 256**31) +
+                       ((128 + 20) * 256**30) +
+                       (2 ** 160 * 256**10);
+                       
+                       max value: ((192 + 21) * 256**31) + ((128 + 20) * 256**30) + (2 ** 160 * 256**10)
+                       (< 2^256)
+                       
+			if (0 < n && n < MAX_SINGLE_BYTE) {
+				word += n * 256**9;
+			} else {
+				word += (128 + nonce_bytes) * 256**9;
+				word += n * 256**(9 - nonce_bytes);
+			}
+			
+			Top branch; n is at most 128; adding (128 * 256 ** 9) to word; no overflow
+			
+			Bottom branch; always less than the above if nonce_bytes is truly the number of bytes
+			representing *n*
+
+
+(ERC20 functions):
+
+	All subtractions are overflow-checked by inspection.  Additions are not, but are safe assuming that value
+	is conserved by transfers, no exploits exist in mint/free/etc, and totalSupply never exceeds ~2 ** 255, far
+	higher than we require.
+
+(contract_gas_token.sol):
+
+	totalSupply(): no overhead if invariant that s_head >= s_tail.  If s_head < s_tail, contract state is anyway corrupted.
+	
+	mint(): loop will run exactly value times (no overflow possible in loop counter / bounds).  Value is then bounded by 
+	available gas to quite a small number, and if both balances and totalSupply are not corrupted, no overflow should occur
+	in the remainder of the function.
+	
+	destroyChildren(): This time, value is bounded by balance of sender's account; overflow is impossible if tail + value < INT_MAX,
+	which is certainly the case if the loop variant is enforced (max value that can be mined in 1 block is in the hundreds).
+	The function is internal, so cannot be called directly; in all calls, we manually inspect that the critical overflow present in the
+	loop bounds of this function, that could cause the loop not to run, is guarded against by checks that the sender actually has *value*
+	balance available, placing implicit bounds on tail + value (as we assume supply will never exceed 5 billion).
+
+	Additional ERC20 helper functions all do subtraction after explicitly overflow checking, so are not vulnerable to overflow.
+	Any subtracted balances have been bound-checked, as have subtracted allowances.
+	
+(gas_token.sol):
+
+	mint(): as above, loop will run exactly value times (no overflow possible in loop counter / bounds by explicit overflow check). 
+	Value is then bounded by available gas to quite a small number, and if both balances and totalSupply are not corrupted, 
+	no overflow should occur in the remainder of the function.
+	
+	freeStorage(): identical to above but with subtraction.  In all calls to this internal function, it is explicitly checked that
+	value < sender_balance, which can be bounded at 5 billion by our supply bound invariants.  storage_location_array + supply
+	can then not overflow; subtracting value also cannot underflow as value < supply if supply is uncorrupted.
+	
+	ERC20 helpers: Identical to above.
+
+
+[ Denial of Service / Gas Limits ]
+
+We exclude ERC20 functions here; as previously described, the ERC20 functions in this contract
+were duplicated from an existing ERC20, with overflow checks _removed_, making them strictly
+more efficient in gas behavior and more permissive w.r.t. the class of all inputs.
+
+(rlp.sol):
+
+	- count_bytes ; Only possible DoS is while loop running infinitely, which WILL occur with
+	a called value of between 2^255 and 2^256-1.  This however is not an issue as such values are explicitly
+	disallowed by the maximum nonce guard in the only caller of this internal function.
+	
+	- mk_contract_address ; The only potential DoS vector is in the inline assembly, as none of the Solidity
+	operations in this function can throw.  
+	
+	        assembly {
+            let mem_start := mload(0x40)        // get a pointer to free memory
+            mstore(mem_start, word)             // store the rlp encoding
+            hash := sha3(mem_start,
+                         add(tot_bytes, 1))     // hash the rlp encoding
+        }
+        
+    mload should never fail, nor should mstore; the sha3 operation is tested as working against all reasonable
+    inputs, which cannot be adversarially controlled (the only calls to rlp.sol's internal functions are with
+    controlled, monotonically increasing addresses, and our base balance).  SHA3 of word should always succeed
+    anyway, so no operations in this function are vulnerable to DoS.
+
+(contract_gas_token.sol):
+
+	makeChild(): the only failure possible here is in create, which can fail due to OOG.
+	There are a few possible cases here:
+		- There is not enough gas for the CREATE itself (the 32k required gas).  In this case, the outer call
+		frame OOGs, no vulnrability occurs.
+		- There is enough gas for the CREATE to run, but the constructor or storage of the constructed contract to
+		OOG.  Both these operations together require <7k gas, which we have empirically checked.  Two SSTOREs need to
+		occur in the outer frame, which costs at minimum 10k gas (the minimum cost for a storage update is 5k gas).
+		Therefore, OOGing in CREATE will cause an OOG in the outer call frame.
+		
+	A potential uncaught OOG in a CREATE in makeChild could be serious, as it could credit a user for minting
+	a token without debiting the requisite gas.  This would essentially break GasToken, allowing attackers to
+	arbitrarily create tokens at will.  Today, the security of GasToken relies STRONGLY on the current gas rules
+	of the EVM, and could at any time be compromised by their modification.
+	
+	create can potentially fail for reasons other than OOG, such as a hash collision causing an existing contract
+	to exist at that address or indexing corruption in the outer contract, though these are unlikely eventualities.
+	
+	A similar pattern exists in free / destroyChildren by inspection, though we do not analyze this because a failure
+	here results only in a user losing their refund (and can for example surely occur due to compiler bugs such as 
+	https://github.com/ethereum/solidity/issues/2999 , which create is not vulnerable to by virtue of its inability
+	to take custom gas amounts)
+		
+	There are no operations vulnerable to failure, by inspection, in the ERC20 helper or mint functions,
+	unless the balances array is corrupted (in which case service can obviously be denied to victims of this
+	corruption).
+
+(gas_token.sol):
+  
+	No variable-gas or potential DoS vulnerabilities (arbitrary throws, etc.) are possible in any of the functions by
+	inspection.  The only exception is the overflow check on mint loop bounds, which if an attacker can trigger to always
+	throw, would deny service to token generation.  This is not a security issue, as existing users can still transfer 
+	or free tokens, and is only possible with corruption of totalSupply (as totalSupply + value + 0xDEADBEEF must overflow).
+
+	There are no operations vulnerable to failure, by inspection, in the ERC20 helper or mint functions,
+	unless the balances array is corrupted (in which case service can obviously be denied to victims of this
+	corruption).
+	
+	Other operations like SSTORE can only fail due to OOG, which will propagate a failure in the outer frame.	
+	
+[ Inheritance Shadowing ]
+
+The only inheritance in the codebase is GST2 extending RLP, which has been manually
+inspected and does not contain any shadowing.
+
+[ Upgradeability ]
+
+Contracts are explicitly non-upgradeable.  See: "Human in the Loop".
+
+[ Stuck Ether ]
+
+No payable functions exist in the contract, so no stuck Ether is possible.
+
+[ Timestamp / RNG ]
+
+No timestamp or RNG functionality is included in any of the analyzed contracts.
+
+[ Human in the loop ]
+
+We explicitly place no human in the loop on these contracts, warning clients in our website documentation.
+
+Human in the loop would be undesireable for this contract, where it would give the human an ability to 
+deny service to stored gas or redistribute stored gas, violating the intended purpose of the contract.
+
+[ Game Theoretic Bugs ]
+
+Outside the scope of this review.
+
+[ Re-entrancy / recursive send ]
+
+The only external call in any of the contracts potentially vulnerable to re-entrancy is on line 
+162 of GST2:
+
+     mk_contract_address(this, i).call();
+            
+If an attacker is able to control the output of mk_contract_address to the extent that it generates
+an adversarially chosen address, the attacker would be able to exploit the following re-entrancy bug:
+
+
+     Call free -> re-enter into fre from destroyChildren's call -> call free -> (...)
+
+
+Essentially allowing them to free a larger amount of contracts than should be enabled by their
+balance, "stealing" gas refunds from legitimate users of GST2.
+
+Note that mk_contract_address only has a single call anywhere in GST2, and is otherwise marked
+internal (cannot be called externally).  In this call, the base address of "this" is used, which
+will always resolve to the deployment address of GST2 (0x0000....).  The nonce / "i" value is also
+not user controlled; it will sweep from s_tail+1 to tail + value inclusive.  It is therefore
+unlikely that, barring hash collisions, a user will be able to deploy arbitrary code at freed
+addresses, assuming the correctness of the mk_contract_address function given its inputs.
+Because there are relatively exhaustive tests for this in the suite, the probability of
+exploitability is low.
+
+[ Stack issues ]
+
+Solidity will primarily loudly fail on stack overflows, with the exception of the "unchecked
+call/create pattern".  We use this pattern in only two locations in the entire audited codebase,
+both in GST2.  We rely on the built-in protection of Tangerine Whistle to prevent critical failures due
+to silent stack overflow failure, e.g. in the mint function where it would allow for creation of 
+unbounded tokens.  We analyze these "unchecked sends" w.r.t. gas exhaustion in the DoS section,
+and argue that they are benign, but recommend asserting the create in the mint function for
+added redundancy (a change that has been made for ETC but deemed not-secutity-critical for ETH).
+
+[ Input-Controlled Jumps ]
+
+No jumps that are controlled by user inputs (that would allow for example accessing of internal functions).
+This includes default functions, which are not present in any of our contracts (eg contracts will throw
+with unknown data).
+
+[ Incorrect / Missing Modifiers ]
+
+The following modifiers are critically used in our code: payable, public, internal (pure is also used but
+not security critical so out of scope of this brief analysis; all instances where pure is used have
+been checked to not have side effects, and access only constants from global storage that do trigger
+some false positives on static analysis tools).
+
+Public functions are: ERC20 functions and helpers, mint and free.
+
+All other functions are internal.
+
+The above has been manually validated on all files.
+
+[ Function-Level Correctness / Testing Analysis ]
+
+We exclude full correctness analysis and testing analysis from the scope of this report due to limited time;
+any external investors should do their due diligence w.r.t. the provided tests and their completion.
+
+Several of the non-ERC20 tests do not check all boundary values or have full branch/decision coverage,
+and we recommend remedying this before trusting the contract with funds.
