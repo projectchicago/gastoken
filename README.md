@@ -10,6 +10,7 @@ This repository contains the Solidity code for two GasToken variants (GST1 and G
 ## Dependencies
 
 The code was tested using python 3.6.2 and Solidity Version: 0.4.18+commit.9cf6e910.Darwin.appleclang
+
 Run
 
 ```sh
