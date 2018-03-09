@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from eth_abi import encode_abi
 from eth_utils import (
     encode_hex,
@@ -25,8 +27,8 @@ tx_gas_consumed = 982614
 batchtimes = open("batchtimes").read().splitlines()
 batchtimes = [[int(float(y)) for y in x.split(",")] for x in batchtimes]
 
-print "Initial batchtimes loaded, showing last 50"
-print batchtimes[-50:]
+print("Initial batchtimes loaded, showing last 50")
+print(batchtimes[-50:])
 
 while True:
     batch_start_nonce = w3.eth.getTransactionCount(pool_addr)
@@ -60,15 +62,15 @@ while True:
                 txn_hash = w3.eth.sendTransaction(transaction)
                 break
             except Exception as e:
-                print "web3 comms failed"
-                print e
+                print("web3 comms failed")
+                print(e)
                 if "known" in str(e) or "underpriced" in str(e):
                     break # script was restarted, tx already sent
                 time.sleep(5)
-        print "tx sent", txn_hash, curr_nonce
+        print("tx sent", txn_hash, curr_nonce)
         curr_nonce += 1
     batch_sent = time.time()
-    print "batch sent!", batch_sent
+    print("batch sent!", batch_sent)
     while True:
         try:
             timed_out = False
@@ -77,7 +79,7 @@ while True:
                 if time.time() - batch_sent > batch_timeout:
                     gas_price += gas_delta
                     timed_out = True
-                    print "Timed out, upping price.  New price", gas_price
+                    print("Timed out, upping price.  New price", gas_price)
                     break
             if timed_out:
                 break
@@ -85,17 +87,17 @@ while True:
             # batchtimes is list of (end_nonce,time_start,time_end,wei_consumed)
             batchtuple = (curr_nonce,batch_sent,time.time(),1.0*gas_price*tx_gas_consumed*batch_size)
             batchtimes += [batchtuple]
-            print "batch mined", batchtuple
+            print("batch mined", batchtuple)
             open("batchtimes", "a").write(",".join([str(int(x)) for x in batchtuple]) + "\n")
             burn_rate = batchtuple[3] / (batchtuple[2] - batchtuple[1])
             adjustment_factor = min(max((wei_per_second / burn_rate), .75), 2.0)
             new_price = max(int(adjustment_factor * gas_price), int(1e9) + 20)
-            print "Adjusting gas.  Burn rate / target / adjustment factor / old gas / new gas"
-            print burn_rate, wei_per_second, adjustment_factor, gas_price, new_price
+            print("Adjusting gas.  Burn rate / target / adjustment factor / old gas / new gas")
+            print(burn_rate, wei_per_second, adjustment_factor, gas_price, new_price)
             gas_price = new_price
             break
         except Exception as e:
-            print e
+            print(e)
             pass
 
 
