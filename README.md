@@ -48,6 +48,6 @@ We are a team of blockchain researchers from around the world:
 <li><a href="http://floriantramer.com/">Florian Tramèr</a> (<a href="https://www.stanford.edu/">Stanford University</a>)</li>
 </ul>
 
-with advice, review, and support from <a href="http://www.arijuels.com/">Ari Juels</a> (<a  href="https://tech.cornell.edu/">Cornell Tech</a>, <a href="http://www.initc3.org/">IC3</a>, <a href="https://jacobsinstitute.org/">The Jacobs Institute</a>).
+with advice, review, and support from <a href="http://www.arijuels.com/">Ari Juels</a> (<a  href="https://tech.cornell.edu/">Cornell Tech</a>, <a href="http://www.initc3.org/">IC3</a>, <a href="https://tech.cornell.edu/jacobs-technion-cornell-institute/overview">The Jacobs Institute</a>).
 
 We offer absolutely no support, guarantees, advice, or other help with GasToken. If you like it, use it.
