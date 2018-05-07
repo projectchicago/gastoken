@@ -37,10 +37,6 @@ contract BTCGasToken is ERC721Token {
         _mint(maker, id);
     }
     
-    function lol() returns(uint) {
-        return block.number;
-    }
-    
     function take(uint id) public payable {
         require(id < num_issued);
         Derivative storage d = derivativeData[id];
