@@ -22,8 +22,6 @@ contract BTCGasToken is ERC721Token {
     
     mapping (uint => Derivative) public derivativeData;
     
-    uint num_issued = 0;
-    
     event DerivativeCreated(uint indexed id, address indexed maker, uint makerAmount, uint takerAmount, uint triggerPrice, uint triggerHeight);
     event DerivativeTaken(uint indexed id, address indexed maker, address indexed taker, uint makerAmount, uint takerAmount, uint triggerPrice, uint triggerHeight);
     event DerivativeSettled(uint indexed id, address indexed maker, address indexed taker, uint makerAmount, uint takerAmount, uint triggerPrice, uint actualPrice, uint triggerHeight);
@@ -57,8 +55,7 @@ contract BTCGasToken is ERC721Token {
         require(takerAmount > TC_FEE);
         address maker = msg.sender;
         uint makerAmount = msg.value;
-        uint id = num_issued;
-        num_issued += 1;
+        uint id = totalSupply();
         derivativeData[id] = Derivative(maker, 0x0, makerAmount, takerAmount, triggerPrice, triggerHeight, false, false);
         emit DerivativeCreated(id, maker, makerAmount, takerAmount, triggerPrice, triggerHeight);
         _mint(maker, id);
@@ -66,7 +63,7 @@ contract BTCGasToken is ERC721Token {
     }
     
     function take(uint id) public payable {
-        require(id < num_issued);
+        require(id < totalSupply());
         Derivative storage d = derivativeData[id];
         require(block.number < d.triggerHeight);
         require(!d.taken);
@@ -80,7 +77,7 @@ contract BTCGasToken is ERC721Token {
     function settle(uint id) public {
         // anyone can call this for now; make it an option? 
         // restrict only to taker and/or maker to be settled?
-        require(id < num_issued);
+        require(id < totalSupply());
         Derivative storage d = derivativeData[id];
         require(block.number >= d.triggerHeight);
         require(d.taken);
@@ -103,7 +100,7 @@ contract BTCGasToken is ERC721Token {
     
     function tcBTCFeeHandler(uint64 requestId, uint64 error, bytes32 respData) public {
         require(msg.sender == address(tcContract));
-        require(globalLastSeenID < num_issued);
+        require(globalLastSeenID < totalSupply());
         Derivative storage d = derivativeData[globalLastSeenID];
         require(block.number >= d.triggerHeight);
         require(d.taken);
@@ -130,7 +127,7 @@ contract BTCGasToken is ERC721Token {
     }
     
     function cancel(uint id) public {
-        require(id < num_issued);
+        require(id < totalSupply());
         Derivative storage d = derivativeData[id];
         require(msg.sender == d.maker);
         require(!d.taken);
