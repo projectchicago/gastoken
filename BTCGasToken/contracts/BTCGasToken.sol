@@ -94,8 +94,9 @@ contract BTCGasToken is ERC721Token {
             d.taker.send(d.takerAmount - TC_FEE);
         } else {
         }
+        assert(tcRequestId != 0);
         emit TCRequestStatus(tcRequestId);
-        require(tcRequestId != 0);
+        globalLastSeenID = id;
     }
     
     function tcBTCFeeHandler(uint64 requestId, uint64 error, bytes32 respData) public {
