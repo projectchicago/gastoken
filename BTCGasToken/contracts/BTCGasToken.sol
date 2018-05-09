@@ -16,8 +16,7 @@ contract BTCGasToken is ERC721Token {
         uint takerAmount;
         uint triggerPrice;
         uint triggerHeight;
-        bool settleStarted;
-        bool settleFinished;
+        bool settled;
         bool taken;
     }
     
@@ -27,11 +26,11 @@ contract BTCGasToken is ERC721Token {
     
     event DerivativeCreated(uint indexed id, address indexed maker, uint makerAmount, uint takerAmount, uint triggerPrice, uint triggerHeight);
     event DerivativeTaken(uint indexed id, address indexed maker, address indexed taker, uint makerAmount, uint takerAmount, uint triggerPrice, uint triggerHeight);
-    event DerivativeSettled(uint indexed id, address indexed maker, address indexed taker, uint makerAmount, uint takerAmount, uint triggerPrice, uint triggerHeight);
+    event DerivativeSettled(uint indexed id, address indexed maker, address indexed taker, uint makerAmount, uint takerAmount, uint triggerPrice, uint actualPrice, uint triggerHeight);
     
     TownCrier tcContract; 
     bytes4 constant TC_CALLBACK_FID = bytes4(keccak256("tcBTCFeeHandler(uint64,uint64,bytes32)"));
-    uint constant MIN_GAS = 30000 + 20000;
+    uint constant MIN_GAS = 3* (30000 + 20000);
     uint constant GAS_PRICE = 5 * 10 ** 10;         // TODO figure out if there's a better non-static way to peg the TC fee
     uint constant TC_FEE = MIN_GAS * GAS_PRICE;
     
@@ -41,6 +40,7 @@ contract BTCGasToken is ERC721Token {
     // TODO rewire TownCrier to pass through Derivative IDs 
     // So we aren't using a method that's vulnerable to race conditions
     uint256 globalLastFeeTicker;
+    uint globalLastSeenID;
 
     // Rinkeby test endpoint 0x9eC1874FF1deF6E178126f7069487c2e9e93D0f9
     constructor(address tcEndpointAddress) ERC721Token("BTCFees by gastoken.io", "BTCF") public {
@@ -53,13 +53,13 @@ contract BTCGasToken is ERC721Token {
     function mint(uint takerAmount,  uint triggerPrice, uint triggerHeight) public payable returns (uint) {
         //require(block.number < triggerHeight);
         // minimum .01 ETH = 10000000000000000
-        require(msg.value > 10000000000000000);
+        require(msg.value > 9999999999999999);
         require(takerAmount > TC_FEE);
         address maker = msg.sender;
         uint makerAmount = msg.value;
         uint id = num_issued;
         num_issued += 1;
-        derivativeData[id] = Derivative(maker, 0x0, makerAmount, takerAmount, triggerPrice, triggerHeight, false, false, false);
+        derivativeData[id] = Derivative(maker, 0x0, makerAmount, takerAmount, triggerPrice, triggerHeight, false, false);
         emit DerivativeCreated(id, maker, makerAmount, takerAmount, triggerPrice, triggerHeight);
         _mint(maker, id);
         return id;
@@ -70,23 +70,22 @@ contract BTCGasToken is ERC721Token {
         Derivative storage d = derivativeData[id];
         require(block.number < d.triggerHeight);
         require(!d.taken);
-        assert(!d.settleFinished);
+        assert(!d.settled);
         require(msg.value == d.takerAmount);
         d.taken = true;
         d.taker = msg.sender;
         emit DerivativeTaken(id, d.maker, d.taker, d.makerAmount, d.takerAmount, d.triggerPrice, d.triggerHeight);
     }
     
-    function settleStep1(uint id) public {
+    function settle(uint id) public {
         // anyone can call this for now; make it an option? 
         // restrict only to taker and/or maker to be settled?
         require(id < num_issued);
         Derivative storage d = derivativeData[id];
         require(block.number >= d.triggerHeight);
         require(d.taken);
-        require(!d.settleFinished);
-        require(!d.settleStarted);
-        d.settleStarted = true;
+        require(!d.settled);
+        d.settled = true;
         // Check whether triggerPrice is greater than current price
         // If so, pay maker full value; else pay taker full value
         bytes32[] memory requestData = new bytes32[](0);
@@ -104,25 +103,20 @@ contract BTCGasToken is ERC721Token {
     
     function tcBTCFeeHandler(uint64 requestId, uint64 error, bytes32 respData) public {
         require(msg.sender == address(tcContract));
-        
+        require(globalLastSeenID < num_issued);
+        Derivative storage d = derivativeData[globalLastSeenID];
+        require(block.number >= d.triggerHeight);
+        require(d.taken);
+        require(d.settled);
+
         if (error == 0) {
             emit TCData(requestId, error, respData);
             globalLastFeeTicker = uint256(respData);
         } else {
             emit TCData(requestId, error, 0);
+            return; // TODO maybe don't silently fail... except this is a TC transaction and TC doesn't care
         }
-    }
-    
-    function settleStep2(uint id) public {
-        // anyone can call this for now; make it an option? 
-        // restrict only to taker and/or maker to be settled?
-        require(id < num_issued);
-        Derivative storage d = derivativeData[id];
-        require(block.number >= d.triggerHeight);
-        require(d.taken);
-        require(d.settleStarted);
-        require(!d.settleFinished);
-        d.settleFinished = true;
+
         // TODO Use Zeppelin SafeMath because in 2018 we apparently still have to worry about integer overflow in greenfield programming languages
         uint jackpot = d.makerAmount + d.takerAmount - TC_FEE;
         // Check whether triggerPrice is greater than current price
@@ -132,17 +126,17 @@ contract BTCGasToken is ERC721Token {
         } else {
             d.taker.transfer(jackpot);
         }
+        emit DerivativeSettled(globalLastSeenID, d.maker, d.taker, d.makerAmount, d.takerAmount, d.triggerPrice, globalLastFeeTicker, d.triggerHeight);
     }
     
     function cancel(uint id) public {
         require(id < num_issued);
         Derivative storage d = derivativeData[id];
+        require(msg.sender == d.maker);
         require(!d.taken);
-        // TODO negotiate cancellations with TownCrier
-        // and support cancellation in the in-between settlement1 and 2 phase
-        require(!d.settleStarted);
-        assert(!d.settleFinished);
-        d.settleFinished = true;
+        // TODO negotiate cancellations with TownCrier, TownCrier also has a cancel function.........
+        require(!d.settled);
+        d.settled = true;
         d.maker.transfer(d.makerAmount);
     }
 }
