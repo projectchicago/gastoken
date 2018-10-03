@@ -128,8 +128,8 @@ contract GasToken2 is Rlp {
             // Almost done! All we have to do is put this short (31 bytes) blob into
             // memory and call CREATE with the appropriate offsets.
             let solidity_free_mem_ptr := mload(0x40)
-            mstore(solidity_free_mem_ptr, 0x00756eb3f879cb30fe243b4dfee438691c043318585733ff6000526016600af3)
-            addr := create(0, add(solidity_free_mem_ptr, 1), 31)
+            mstore(solidity_free_mem_ptr, 0x756eb3f879cb30fe243b4dfee438691c043318585733ff6000526016600af300)
+            addr := create(0, solidity_free_mem_ptr, 31)
         }
     }
 
