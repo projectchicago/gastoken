@@ -139,7 +139,25 @@ contract GasToken2 is Rlp {
     function mint(uint256 value) public {
         assembly {
             mstore(0, 0x756eb3f879cb30fe243b4dfee438691c043318585733ff6000526016600af300)
-            for {let i := value} i {i := sub(i, 1)} {
+            for {let i := shr(value, 5)} i {i := sub(i, 1)} {
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+                pop(create(0, 0, 31)) pop(create(0, 0, 31))
+            }
+            for {let i := and(value, 0x1F)} i {i := sub(i, 1)} {
                 pop(create(0, 0, 31))
             }
         }
