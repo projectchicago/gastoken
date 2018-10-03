@@ -137,8 +137,11 @@ contract GasToken2 is Rlp {
     // new child contracts. The minted tokens are owned by the caller of this
     // function.
     function mint(uint256 value) public {
-        for (uint256 i = 0; i < value; i++) {
-            makeChild();
+        assembly {
+            mstore(0, 0x756eb3f879cb30fe243b4dfee438691c043318585733ff6000526016600af300)
+            for {let i := value} i {i := sub(i, 1)} {
+                pop(create(0, 0, 31))
+            }
         }
         s_head += value;
         s_balances[msg.sender] += value;
