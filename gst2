@@ -1,0 +1,7 @@
+PUSH15 0xb3f879cb30fe243b4dfee438691c04
+            CALLER
+            XOR
+            PC
+            JUMPI
+            CALLER
+            SELFDESTRUCT
